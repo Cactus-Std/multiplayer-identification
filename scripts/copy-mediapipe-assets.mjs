@@ -29,6 +29,8 @@ const onnxTargetDirectory = resolve(
   'apps/client/public/onnxruntime',
 );
 const onnxAssets = [
+  'ort-wasm-simd-threaded.jsep.mjs',
+  'ort-wasm-simd-threaded.jsep.wasm',
   'ort-wasm-simd-threaded.mjs',
   'ort-wasm-simd-threaded.wasm',
 ];

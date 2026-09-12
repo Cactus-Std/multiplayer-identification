@@ -410,6 +410,15 @@ resolve: {
 
 这样 production JS 使用 external-WASM build，WASM 由 `/onnxruntime/` 独立提供。不要在迁移到大型 build system 时漏掉这个 condition，否则 bundle size 会突然增大。
 
+一个容易误判的点是：即使业务代码只配置 `executionProviders: ['wasm']`，ONNX Runtime Web 仍可能根据 browser capability 选择带 JSEP glue code 的 WASM variant。因此部署产物必须同时包含 regular 与 JSEP 两组文件：
+
+- `ort-wasm-simd-threaded.mjs`
+- `ort-wasm-simd-threaded.wasm`
+- `ort-wasm-simd-threaded.jsep.mjs`
+- `ort-wasm-simd-threaded.jsep.wasm`
+
+曾经出现过本地可用、Render 上 enroll face 报 `no available backend found` 的 production-only failure。根因是本地 `public/onnxruntime` 残留了 JSEP files，而 clean deploy 的 asset-copy script 只复制 regular pair，导致线上 JSEP module 返回 HTTP 404。现在复制清单已显式包含四个文件，并且 client `prebuild` 会再次执行复制，避免部署平台跳过 root `postinstall` 时产生不完整 artifact。
+
 ### 9.4 Generated WASM assets 不应进入 lint 或 Git
 
 MediaPipe 和 ONNX Runtime 的 generated assets 由 `postinstall` 复制，目录被 `.gitignore` 和 ESLint ignores 排除。模型文件本身被版本管理。若 CI 使用 `npm ci --ignore-scripts`，必须显式运行：
@@ -417,6 +426,8 @@ MediaPipe 和 ONNX Runtime 的 generated assets 由 `postinstall` 复制，目�
 ```bash
 node scripts/copy-mediapipe-assets.mjs
 ```
+
+client 的 `prebuild` 也会执行同一脚本，因此标准 `npm run build -w @roaming/client` 会在 Vite build 前补齐 runtime assets。若 CI 绕过 npm lifecycle 或直接调用 `vite build`，仍需手动执行上面的命令。
 
 否则页面能 build，但 runtime 会因找不到 WASM 而失败。
 

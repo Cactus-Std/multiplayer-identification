@@ -138,7 +138,7 @@ npm run model:check
 - **Room not found after restart:** rooms and all future face embeddings live only in server memory; restarting the server intentionally clears them.
 - **Camera permission denied:** open the frontend as `http://localhost:5173`, allow camera access for localhost, close other camera-heavy applications, and reload.
 - **No face / multiple faces:** keep one well-lit face centered, at least about 20% of the video width. Only one face is accepted for enrollment or recognition.
-- **Model loading failure:** run `npm install` again to regenerate local WASM assets, then run `npm run model:check`. Check that `/models`, `/mediapipe`, and `/onnxruntime` are served by Vite.
+- **Model loading failure:** run `npm install` again to regenerate local WASM assets, then run `npm run model:check`. Check that `/models`, `/mediapipe`, and `/onnxruntime` are served by Vite. A production deployment must publish both the regular and JSEP ONNX Runtime files; in particular, verify that `/onnxruntime/ort-wasm-simd-threaded.jsep.mjs` and its matching `.wasm` file return HTTP 200 rather than 404.
 - **Recognition is too strict or loose:** open Camera Debug and tune match threshold and second-best margin for the room, lighting, and camera.
 - **Action rejected:** confirm the detected identity is the current-turn player and that the socket is connected. Presence intentionally expires after two seconds.
 
