@@ -466,6 +466,7 @@ input:focus {
 }
 .game-screen > header {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   padding: 23px 28px;
   border-bottom: 1px solid var(--line);
@@ -473,6 +474,22 @@ input:focus {
   font:
     12px 'DM Mono',
     monospace;
+}
+.game-leave-button {
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: transparent;
+  color: #aeb4bf;
+  font:
+    10px 'DM Mono',
+    monospace;
+  letter-spacing: 0.04em;
+}
+.game-leave-button:hover,
+.game-leave-button:focus-visible {
+  border-color: #ff8790;
+  color: #ff8790;
 }
 .game-focus {
   display: grid;

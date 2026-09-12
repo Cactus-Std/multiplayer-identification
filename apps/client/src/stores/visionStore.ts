@@ -44,6 +44,7 @@ interface VisionStore {
   ) => void;
   setMatchThreshold: (threshold: number) => void;
   setMatchMargin: (margin: number) => void;
+  resetIdentity: () => void;
 }
 
 export const useVisionStore = create<VisionStore>((set) => ({
@@ -111,4 +112,18 @@ export const useVisionStore = create<VisionStore>((set) => ({
     })),
   setMatchThreshold: (matchThreshold) => set({ matchThreshold }),
   setMatchMargin: (matchMargin) => set({ matchMargin }),
+  resetIdentity: () =>
+    set({
+      state: 'idle',
+      recognizedPlayerId: null,
+      confidence: null,
+      rawMatchedPlayerId: null,
+      rawMatchSimilarity: null,
+      secondBestPlayerId: null,
+      secondBestSimilarity: null,
+      error: null,
+      detectedFaces: 0,
+      detectionConfidence: null,
+      recognitionFps: 0,
+    }),
 }));

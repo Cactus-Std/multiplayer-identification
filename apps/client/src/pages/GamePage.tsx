@@ -4,7 +4,7 @@ import { playActionSound } from '../audio/actionSound';
 import { CameraPanel } from '../components/CameraPanel';
 import { IDENTITY_DEBUG_MODE } from '../config/env';
 import { usePresenceSync } from '../hooks/usePresenceSync';
-import { performDemoAction } from '../networking/socket';
+import { leaveRoom, performDemoAction } from '../networking/socket';
 import { useRoomStore } from '../stores/roomStore';
 import { useVisionStore } from '../stores/visionStore';
 
@@ -46,6 +46,9 @@ export function GamePage() {
       <header>
         <span>ROOM {room.code}</span>
         <span>TURN {room.gameState.turnNumber}</span>
+        <button className="game-leave-button" onClick={leaveRoom}>
+          LEAVE ROOM
+        </button>
       </header>
       <section className="game-focus">
         <p className="eyebrow">

@@ -6,6 +6,7 @@ import { io, type Socket } from 'socket.io-client';
 import { SERVER_URL } from '../config/env';
 import { useConnectionStore } from '../stores/connectionStore';
 import { useRoomStore } from '../stores/roomStore';
+import { useVisionStore } from '../stores/visionStore';
 
 export const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(
   SERVER_URL,
@@ -79,7 +80,10 @@ export function leaveRoom(): void {
   const { deviceId, roomCode, setRoomCode } = useConnectionStore.getState();
   if (roomCode) socket.emit('room:leave', { roomCode, deviceId });
   setRoomCode(null);
-  useRoomStore.getState().setRoom(null);
+  const roomStore = useRoomStore.getState();
+  roomStore.setEnrollingPlayerId(null);
+  roomStore.setRoom(null);
+  useVisionStore.getState().resetIdentity();
 }
 
 export function addPlayer(
