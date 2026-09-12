@@ -51,7 +51,14 @@ Only one laptop runs the game server. Every laptop runs its own frontend locally
 
 1. Find the server laptop's LAN IP. On macOS, try `ipconfig getifaddr en0`; on Windows, run `ipconfig` and look for the Wi-Fi IPv4 address.
 2. Clone this repository and run `npm install` on each laptop.
-3. Copy `apps/client/.env.example` to `apps/client/.env.local` on every laptop.
+3. Copy the tracked example on every laptop:
+
+   ```bash
+   cp apps/client/.env.example apps/client/.env.local
+   ```
+
+   Windows PowerShell equivalent: `Copy-Item apps/client/.env.example apps/client/.env.local`.
+
 4. Set the server URL using the real LAN IP, for example:
 
    ```env
@@ -62,6 +69,34 @@ Only one laptop runs the game server. Every laptop runs its own frontend locally
 6. Open `http://localhost:5173` on each machine. Create one room, join the same code everywhere, enroll players once, and start the game from the host laptop.
 
 The backend listens on `0.0.0.0:3001` by default. Override it with `HOST` and `PORT` if needed.
+
+### Connected, but `ROOM NOT FOUND`
+
+If the UI says the server is connected but a friend's room cannot be found, the client is usually connected to the wrong server. Without `apps/client/.env.local`, the frontend falls back to `http://localhost:3001`. If both laptops run `npm run dev`, each may have its own in-memory server, so a room created on one laptop does not exist on the other.
+
+1. On the host laptop, find its LAN IP and keep the server running:
+
+   ```bash
+   ipconfig getifaddr en0
+   npm run dev:server
+   ```
+
+2. From the joining laptop, verify that the host server is reachable:
+
+   ```bash
+   curl http://192.168.1.20:3001/health
+   ```
+
+3. On the joining laptop, set `apps/client/.env.local` to the host laptop's real IP:
+
+   ```env
+   VITE_SERVER_URL=http://192.168.1.20:3001
+   VITE_IDENTITY_DEBUG_MODE=false
+   ```
+
+4. Fully stop and restart Vite with `npm run dev:client`; refreshing the browser does not reload Vite environment variables.
+
+If the health check fails, check the host firewall, port `3001`, the LAN IP, and whether the Wi-Fi isolates clients. If the health check succeeds but the room is still missing, make sure the host server was not restarted after room creation—rooms are stored only in that server process's memory.
 
 ## Identity behavior
 

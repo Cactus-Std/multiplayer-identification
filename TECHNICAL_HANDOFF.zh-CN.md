@@ -207,6 +207,18 @@ ipconfig
 
 假设 server laptop 是 `192.168.1.20`，每台 laptop 创建：
 
+```bash
+cp apps/client/.env.example apps/client/.env.local
+```
+
+Windows PowerShell 使用：
+
+```powershell
+Copy-Item apps/client/.env.example apps/client/.env.local
+```
+
+生成的文件路径为：
+
 ```text
 apps/client/.env.local
 ```
@@ -231,6 +243,71 @@ npm run dev:client
 ```
 
 然后都访问本机的 `http://localhost:5173`。不要让其他 laptop 直接打开 `http://192.168.1.20:5173` 做正式 camera test，因为普通 LAN HTTP origin 通常不具备 `getUserMedia` 所需的 secure context。
+
+### 6.3 显示已连接，但加入朋友房间时 `ROOM NOT FOUND`
+
+这类错误通常不是 Socket.IO 断线，也不一定是 room code 输入错误，而是 **frontend 连到了错误的 server**。
+
+如果没有 `apps/client/.env.local`，client 会 fallback 到：
+
+```text
+http://localhost:3001
+```
+
+当两台 laptop 都执行 `npm run dev` 时，两边可能各自启动一个 in-memory game server：朋友创建的 room 只存在于朋友电脑的 server process 中，而你的 browser 虽然显示 `SERVER CONNECTED`，实际连接的是你自己的 localhost server，因此会得到 `ROOM_NOT_FOUND`。
+
+按以下顺序排查：
+
+1. 在创建房间的 host laptop 查询 LAN IP：
+
+   ```bash
+   ipconfig getifaddr en0
+   ```
+
+2. Host laptop 保持唯一的共享 server 运行：
+
+   ```bash
+   npm run dev:server
+   ```
+
+3. 在准备加入的 laptop 测试 host server：
+
+   ```bash
+   curl http://192.168.1.20:3001/health
+   ```
+
+   正常应返回类似：
+
+   ```json
+   { "status": "ok", "timestamp": 1780000000000 }
+   ```
+
+4. 在加入方 laptop 的 `apps/client/.env.local` 写入 host 的真实地址：
+
+   ```env
+   VITE_SERVER_URL=http://192.168.1.20:3001
+   VITE_IDENTITY_DEBUG_MODE=false
+   ```
+
+5. 完全停止并重新启动 Vite：
+
+   ```bash
+   npm run dev:client
+   ```
+
+   只 reload browser 不会让 Vite 重新读取 `.env.local`。
+
+6. 每台 laptop 仍然打开自己的 `http://localhost:5173`，但它们的 `VITE_SERVER_URL` 必须指向同一台 host server。
+
+如果 health check 失败，依次检查：
+
+- 两台设备是否在同一个 Wi-Fi/LAN；
+- host firewall 是否允许 Node 接收入站连接；
+- `3001` 端口是否正在监听；
+- host LAN IP 是否发生变化；
+- 校园/活动 Wi-Fi 是否启用了 client isolation，必要时换用同一热点。
+
+如果 health check 成功但 room 仍不存在，检查 host server 是否在创建 room 后重启过。Room 和 embedding 都是 in-memory state，任何 server restart 都会销毁旧 room，此时需要重新创建并使用新的 room code。
 
 ## 7. 首次使用：录入人脸并确认身份
 
@@ -434,7 +511,7 @@ npm audit --audit-level=high
 | Symptom                     | 首先检查                                                                                  |
 | --------------------------- | ----------------------------------------------------------------------------------------- |
 | `SERVER DISCONNECTED`       | `VITE_SERVER_URL`、server process、LAN IP、防火墙、3001 端口                              |
-| `ROOM NOT FOUND`            | server 是否刚重启；room state 是 in-memory                                                |
+| `ROOM NOT FOUND`            | 是否错误连接了自己的 `localhost:3001`；host server 是否重启；room state 是 in-memory      |
 | 一直 `STARTING CAMERA…`     | localhost/HTTPS、site camera permission、摄像头是否被其他 app 占用                        |
 | `CAMERA UNAVAILABLE`        | 设备是否存在 camera、browser 是否支持 `mediaDevices`                                      |
 | Enrollment 一直不到 10      | 单人入镜、光线、脸大小、12 秒 timeout                                                     |
