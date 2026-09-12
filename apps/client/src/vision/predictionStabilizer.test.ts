@@ -4,34 +4,62 @@ import { PredictionStabilizer } from './predictionStabilizer';
 describe('PredictionStabilizer', () => {
   it('requires four matching predictions in a five-item window', () => {
     const stabilizer = new PredictionStabilizer();
-    stabilizer.update('jack', 0);
-    stabilizer.update('jack', 100);
-    stabilizer.update(null, 200);
-    stabilizer.update('jack', 300);
-    expect(stabilizer.update('jack', 400)).toEqual({
+    stabilizer.update('jack');
+    stabilizer.update('jack');
+    stabilizer.update(null);
+    stabilizer.update('jack');
+    expect(stabilizer.update('jack')).toEqual({
       playerId: 'jack',
       changed: true,
     });
   });
 
-  it('clears identity after one second without a valid prediction', () => {
+  it('keeps a locked identity through missed detections', () => {
     const stabilizer = new PredictionStabilizer();
-    for (let index = 0; index < 4; index += 1) stabilizer.update('jack', index);
-    expect(stabilizer.update(null, 1_004)).toEqual({
-      playerId: null,
+    for (let index = 0; index < 4; index += 1) stabilizer.update('jack');
+    for (let index = 0; index < 20; index += 1) {
+      expect(stabilizer.update(null)).toEqual({
+        playerId: 'jack',
+        changed: false,
+      });
+    }
+  });
+
+  it('switches only after five consecutive matches for another player', () => {
+    const stabilizer = new PredictionStabilizer();
+    for (let index = 0; index < 4; index += 1) stabilizer.update('jack');
+    for (let index = 0; index < 4; index += 1) {
+      expect(stabilizer.update('amy')).toEqual({
+        playerId: 'jack',
+        changed: false,
+      });
+    }
+    expect(stabilizer.update('amy')).toEqual({
+      playerId: 'amy',
       changed: true,
     });
   });
 
-  it('does not keep an old identity alive with unrelated predictions', () => {
+  it('resets switch evidence after a miss or the locked player returns', () => {
     const stabilizer = new PredictionStabilizer();
-    for (let index = 0; index < 4; index += 1) stabilizer.update('jack', index);
-    stabilizer.update('amy', 200);
-    stabilizer.update('sam', 500);
-    stabilizer.update('amy', 800);
-    expect(stabilizer.update('sam', 1_004)).toEqual({
+    for (let index = 0; index < 4; index += 1) stabilizer.update('jack');
+    for (let index = 0; index < 4; index += 1) stabilizer.update('amy');
+    stabilizer.update(null);
+    for (let index = 0; index < 4; index += 1) stabilizer.update('amy');
+    stabilizer.update('jack');
+    expect(stabilizer.update('amy')).toEqual({
+      playerId: 'jack',
+      changed: false,
+    });
+  });
+
+  it('clears the lock only when explicitly reset', () => {
+    const stabilizer = new PredictionStabilizer();
+    for (let index = 0; index < 4; index += 1) stabilizer.update('jack');
+    stabilizer.reset();
+    expect(stabilizer.update(null)).toEqual({
       playerId: null,
-      changed: true,
+      changed: false,
     });
   });
 });

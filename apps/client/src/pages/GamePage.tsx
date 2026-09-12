@@ -53,7 +53,7 @@ export function GamePage() {
       <section className="game-focus">
         <p className="eyebrow">
           {recognizedPlayer
-            ? 'Player detected'
+            ? 'Player locked'
             : showManualIdentity
               ? 'Manual identity mode'
               : 'Looking for a player'}

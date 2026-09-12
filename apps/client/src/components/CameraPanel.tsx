@@ -96,7 +96,7 @@ export function CameraPanel({ players }: CameraPanelProps) {
               </dd>
             </div>
             <div>
-              <dt>Stable identity</dt>
+              <dt>Locked identity</dt>
               <dd>{playerName(recognizedPlayerId)}</dd>
             </div>
             <div>

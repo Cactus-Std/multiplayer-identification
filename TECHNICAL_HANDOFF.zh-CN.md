@@ -92,6 +92,8 @@ multiplayer-identification/
 
 当前 detector 约每 `250 ms` 运行一次，即目标 `3–5 FPS`，而 camera preview 仍可保持浏览器正常帧率。没有在每个 video frame 上运行 inference，以控制 CPU、温度和电池消耗。
 
+Enrollment 与 gameplay recognition 使用不同的 face-size gate：注册仍要求脸宽约占画面 `20%`，以保证保存的 reference embedding 质量；游戏识别放宽到约 `8%`，并把 detection confidence 从 `0.6` 调整为 MediaPipe 默认的 `0.5`。小脸 crop 被放大到 112 × 112 时启用 high-quality canvas smoothing。这里的 `8%` 是进入 recognition pipeline 的工程门槛，不代表任意距离都能可靠识别；实际极限仍取决于 camera resolution、motion blur、lighting 和 face pose。
+
 ### 4.2 Face alignment
 
 BlazeFace 返回 bbox 和 approximate keypoints。当前实现取前两个 eye keypoints，按左右眼 x 坐标排序，然后通过 canvas transform 完成旋转和缩放，将眼睛对齐到 112 × 112 crop 中固定的位置。
@@ -125,10 +127,11 @@ best similarity - second-best similarity >= 0.08
 
 - rolling window 大小为 5；
 - 同一个 player 至少出现 4 次才成为 stable identity；
-- stable player 连续 1 秒没有再次出现时清除；
-- 多张脸或没有通过 threshold/margin 的脸作为无有效 prediction 处理。
+- identity lock 建立后，短时或长期漏检不会自动清除；
+- 只有另一名 enrolled player 连续 5 次通过 threshold/margin，才切换 locked identity；
+- 多张脸或没有通过 threshold/margin 的脸作为无有效 prediction 处理，但不会解除已有 lock。
 
-这是 responsiveness 和 false positive 之间的 prototype 折中。未来应使用真实目标摄像头、灯光和玩家数据做 calibration，而不是把 `0.62/0.08` 当作通用参数。
+这是 gameplay continuity 和 false switch 之间的 prototype 折中。它不是 authentication policy：锁定后的设备会继续代表上一次玩家，直到明确识别到另一人、离开房间或 recognition component 被卸载。未来应使用真实目标摄像头、灯光和玩家数据做 calibration，而不是把 `0.62/0.08` 当作通用参数。
 
 ## 5. Multiplayer、presence 与授权设计
 
@@ -153,7 +156,7 @@ Room、players、turn order 和 score 都由 server 持有。Client 不自行推
 如果每次 inference 都发 Socket event，网络会以约 4 Hz 持续更新，而且 similarity 的细微变化会导致不必要的 rerender。现在的策略是：
 
 - stable identity 改变时立即发送；
-- stable identity 不变时每 1 秒发送一次 heartbeat；
+- locked identity 不变时每 1 秒发送一次 heartbeat，即使当前 frame 暂时没有检测到脸；
 - identity 清空时立即发送 `playerId: null`；
 - server 使用自己的 `Date.now()` 写 `lastSeenAt`，不信任 client timestamp；
 - presence 超过 2 秒即视为 stale。
@@ -360,19 +363,19 @@ Enrollment 期间的 privacy behavior：
 5. 打开 **SHOW CAMERA DEBUG**，检查：
    - `Detected faces = 1`；
    - `Raw match` 有 player 和 similarity；
-   - `Stable identity` 与本人一致；
+   - `Locked identity` 与本人一致；
    - recognition rate 约为 3–5 FPS；
    - `State = recognized`。
 6. 如果该玩家正好是 current-turn player，页面出现 **ACT**；点击后所有 laptop 的 score 和 turn 应同步更新。
 
 ### Step 5：测试 roaming
 
-1. 当前玩家离开 Laptop A。
-2. A 应在约 1 秒后清除 stable identity，并恢复 neutral UI。
-3. 玩家走到 Laptop B 前。
-4. B 应识别同一个 player，并切换到其 player color。
+1. 当前玩家在 Laptop A 完成首次识别，A 建立 identity lock。
+2. 玩家短暂转头、后退或离开画面时，A 应保持该 player，不应因为偶发漏检恢复 neutral UI。
+3. 另一名 enrolled player 单独站到 A 前，连续约 1.25 秒稳定匹配后，A 才切换到新 player；零散误匹配不应切换。
+4. 原玩家走到 Laptop B 前，B 应识别同一个 player，并切换到其 player color。
 5. 如果轮到该 player，应该能够在 B 上执行 ACT。
-6. 其他 player 或 stale device 的 action 应被 server 拒绝。
+6. 其他 player 或 heartbeat 已 stale 的 device action 应被 server 拒绝。
 
 ## 8. 无摄像头时的 debug fallback
 
@@ -445,7 +448,7 @@ Production integration 应使用 HTTPS，而不是依赖 localhost exception。
 
 SPEC 希望只在 identity change 时更新 presence，但 server 同时要求 presence 在 2 秒内保持 fresh。如果完全只发 change event，静止不动的正确玩家两秒后也无法 ACT。
 
-当前折中是 identity change 立即发送，并在 recognized 状态下每 1 秒 heartbeat。Similarity 每 250 ms 可能变化，但不会因此每帧发网络消息。
+当前折中是 identity change 立即发送，并在 identity locked 状态下每 1 秒 heartbeat。Similarity 每 250 ms 可能变化，但不会因此每帧发网络消息。
 
 ### 9.8 Client timestamp 不能用于授权
 
@@ -463,6 +466,14 @@ Server state 有意只放在 memory 中。修改 server file、执行 watch rest
 
 - production mode 强制全部 enrollment 后才能开始；或
 - 为每个 player 明确设置 `identityMode: face | manual | account`，避免隐式切换。
+
+### 9.11 Room snapshot 不应重启 recognition lifecycle
+
+早期 `useFaceRecognition` effect 直接依赖 `players` array。Server 每次 ACT 后都会广播新的 room snapshot；即使 player/embedding 内容没变，structured clone 仍会产生新的 array reference，触发 effect cleanup、dispose provider 并清空 stable identity。这会表现为“玩到一半身份突然消失”。
+
+现在 candidate list 通过 ref 单独更新，recognition lifecycle 只依赖真正的 enable/disable 和 camera lifecycle，普通 game-state/room snapshot 不会重启模型或 stabilizer。合入更大的 state-management system 时也要避免把高频 object identity 变化放进昂贵 inference effect 的 dependency list。
+
+本版本同时采用 sticky identity policy：首次锁定后，漏检不清空，只有另一玩家连续 5 次明确匹配才切换。这有意偏向真实游戏的 continuity，并偏离原始 SPEC 中“玩家离开后设备恢复 neutral”的行为。若未来场景要求安全授权，应把“UI 默认玩家”和“本帧活体确认”拆成两个信号，不能把 sticky lock 当作持续 biometric authentication。
 
 ## 10. 已知限制与 production integration 风险
 

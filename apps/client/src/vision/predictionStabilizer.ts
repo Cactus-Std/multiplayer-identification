@@ -1,5 +1,5 @@
 import {
-  IDENTITY_CLEAR_MS,
+  IDENTITY_SWITCH_REQUIRED_MATCHES,
   PREDICTION_REQUIRED_MATCHES,
   PREDICTION_WINDOW_SIZE,
 } from './config';
@@ -11,28 +11,40 @@ export interface StabilizedPrediction {
 
 export class PredictionStabilizer {
   private readonly predictions: Array<string | null> = [];
-  private readonly lastSeenByPlayer = new Map<string, number>();
   private stablePlayerId: string | null = null;
+  private switchCandidateId: string | null = null;
+  private switchCandidateMatches = 0;
 
-  update(
-    playerId: string | null,
-    timestamp = Date.now(),
-  ): StabilizedPrediction {
+  update(playerId: string | null): StabilizedPrediction {
+    const previousPlayerId = this.stablePlayerId;
+
+    if (this.stablePlayerId) {
+      if (!playerId || playerId === this.stablePlayerId) {
+        this.resetSwitchCandidate();
+      } else if (playerId === this.switchCandidateId) {
+        this.switchCandidateMatches += 1;
+      } else {
+        this.switchCandidateId = playerId;
+        this.switchCandidateMatches = 1;
+      }
+
+      if (
+        this.switchCandidateId &&
+        this.switchCandidateMatches >= IDENTITY_SWITCH_REQUIRED_MATCHES
+      ) {
+        this.stablePlayerId = this.switchCandidateId;
+        this.resetSwitchCandidate();
+      }
+
+      return {
+        playerId: this.stablePlayerId,
+        changed: previousPlayerId !== this.stablePlayerId,
+      };
+    }
+
     this.predictions.push(playerId);
     if (this.predictions.length > PREDICTION_WINDOW_SIZE) {
       this.predictions.shift();
-    }
-    if (playerId) this.lastSeenByPlayer.set(playerId, timestamp);
-
-    const previousPlayerId = this.stablePlayerId;
-    if (
-      this.stablePlayerId &&
-      timestamp - (this.lastSeenByPlayer.get(this.stablePlayerId) ?? 0) >=
-        IDENTITY_CLEAR_MS
-    ) {
-      this.stablePlayerId = null;
-      this.predictions.length = 0;
-      return { playerId: null, changed: true };
     }
 
     const counts = new Map<string, number>();
@@ -50,6 +62,7 @@ export class PredictionStabilizer {
 
     if (winningPlayerId && winningCount >= PREDICTION_REQUIRED_MATCHES) {
       this.stablePlayerId = winningPlayerId;
+      this.predictions.length = 0;
     }
 
     return {
@@ -60,7 +73,12 @@ export class PredictionStabilizer {
 
   reset(): void {
     this.predictions.length = 0;
-    this.lastSeenByPlayer.clear();
     this.stablePlayerId = null;
+    this.resetSwitchCandidate();
+  }
+
+  private resetSwitchCandidate(): void {
+    this.switchCandidateId = null;
+    this.switchCandidateMatches = 0;
   }
 }

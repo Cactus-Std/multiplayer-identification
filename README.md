@@ -23,6 +23,16 @@ Installation also copies MediaPipe and ONNX Runtime WASM files into generated, g
 npm run model:check
 ```
 
+## Hosted deployment on Render
+
+The shared test deployment is available at:
+
+- **Backend health:** [https://multiplayer-identification.onrender.com/health](https://multiplayer-identification.onrender.com/health) — currently returns HTTP 200 with the Express health response.
+- **Frontend application:** [https://multiplayer-identification-frontend.onrender.com/](https://multiplayer-identification-frontend.onrender.com/) — the current browser entry point.
+- **Frontend health URL:** [https://multiplayer-identification-frontend.onrender.com/health](https://multiplayer-identification-frontend.onrender.com/health) — reserved/provided health path; at the time of writing, the Render static site returns HTTP 404 here, so use the frontend root URL for availability checks until a dedicated static health endpoint is deployed.
+
+The hosted deployment is convenient for shared testing. The local and LAN workflows below remain supported and are still the recommended way to test multiple laptops with predictable camera permissions and a locally controlled game server.
+
 ## Run locally
 
 Start the server in one terminal:
@@ -100,14 +110,14 @@ If the health check fails, check the host firewall, port `3001`, the LAN IP, and
 
 ## Identity behavior
 
-- MediaPipe detects a single usable face at about four attempts per second.
+- MediaPipe detects a single usable face at about four attempts per second. Enrollment keeps a 20%-of-frame quality gate, while recognition accepts faces down to roughly 8% of the video width.
 - FaceX produces a normalized 512-value embedding in the browser.
 - Enrollment averages ten local samples and sends only the resulting embedding to the in-memory room.
-- Recognition requires four matching predictions in a five-item rolling window. It clears after one second without a match.
-- A device sends presence when identity changes and then roughly once per second while occupied. Presence is stale after two seconds.
+- Initial recognition requires four matching predictions in a five-item rolling window. Once locked, missed detections do not clear the player; switching requires five consecutive accepted matches for another enrolled player.
+- A device sends presence when the locked identity changes and then roughly once per second while locked. Presence is stale after two seconds if the heartbeat itself stops.
 - The server accepts `ACT` only when the sending device has fresh presence for the current-turn player.
 
-Open **Camera Debug** during a game to see face count, similarities, stable identity, recognition rate, and adjustable threshold/margin controls.
+Open **Camera Debug** during a game to see face count, similarities, locked identity, recognition rate, and adjustable threshold/margin controls.
 
 For a camera-free demo, set this in `apps/client/.env.local` and restart Vite:
 
@@ -137,7 +147,7 @@ npm run model:check
 - **Wrong server IP:** LAN addresses can change after reconnecting to Wi-Fi. Re-check the server laptop's IPv4 address and restart Vite after editing `.env.local`.
 - **Room not found after restart:** rooms and all future face embeddings live only in server memory; restarting the server intentionally clears them.
 - **Camera permission denied:** open the frontend as `http://localhost:5173`, allow camera access for localhost, close other camera-heavy applications, and reload.
-- **No face / multiple faces:** keep one well-lit face centered, at least about 20% of the video width. Only one face is accepted for enrollment or recognition.
+- **No face / multiple faces:** enrollment still needs one well-lit, centered face occupying about 20% of the video width. During gameplay, recognition accepts a centered face down to roughly 8%; very small, blurred, backlit, or heavily angled faces can still exceed the model's practical limit. Only one face is processed at a time.
 - **Model loading failure:** run `npm install` again to regenerate local WASM assets, then run `npm run model:check`. Check that `/models`, `/mediapipe`, and `/onnxruntime` are served by Vite. A production deployment must publish both the regular and JSEP ONNX Runtime files; in particular, verify that `/onnxruntime/ort-wasm-simd-threaded.jsep.mjs` and its matching `.wasm` file return HTTP 200 rather than 404.
 - **Recognition is too strict or loose:** open Camera Debug and tune match threshold and second-best margin for the room, lighting, and camera.
 - **Action rejected:** confirm the detected identity is the current-turn player and that the socket is connected. Presence intentionally expires after two seconds.

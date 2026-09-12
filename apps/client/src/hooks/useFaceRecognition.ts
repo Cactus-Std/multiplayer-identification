@@ -1,4 +1,4 @@
-import { useEffect, type RefObject } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 import type { Player } from '@roaming/shared';
 import { useVisionStore } from '../stores/visionStore';
 import { FACE_DETECTION_INTERVAL_MS } from '../vision/config';
@@ -17,15 +17,25 @@ export function useFaceRecognition(
   const setRecognitionResult = useVisionStore(
     (state) => state.setRecognitionResult,
   );
+  const candidatesRef = useRef(
+    players.flatMap((player) =>
+      player.enrolled && player.faceEmbedding
+        ? [{ playerId: player.id, embedding: player.faceEmbedding }]
+        : [],
+    ),
+  );
 
   useEffect(() => {
-    if (!enabled) return;
-    const candidates = players.flatMap((player) =>
+    candidatesRef.current = players.flatMap((player) =>
       player.enrolled && player.faceEmbedding
         ? [{ playerId: player.id, embedding: player.faceEmbedding }]
         : [],
     );
-    if (candidates.length === 0) return;
+  }, [players]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    if (candidatesRef.current.length === 0) return;
 
     const provider = new MediaPipeOnnxFaceRecognitionProvider();
     const stabilizer = new PredictionStabilizer();
@@ -45,7 +55,7 @@ export function useFaceRecognition(
           const { matchThreshold, matchMargin } = useVisionStore.getState();
           const match = await provider.identify(
             video,
-            candidates,
+            candidatesRef.current,
             matchThreshold,
             matchMargin,
           );
@@ -108,7 +118,6 @@ export function useFaceRecognition(
     };
   }, [
     enabled,
-    players,
     setCameraState,
     setDetectionMetrics,
     setRecognitionResult,

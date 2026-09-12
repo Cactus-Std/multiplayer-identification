@@ -11,8 +11,9 @@ import type { FaceRecognitionProvider } from './faceRecognitionProvider';
 import { MediaPipeFaceDetector } from './faceDetector';
 import {
   FACE_DETECTION_INTERVAL_MS,
+  FACE_ENROLLMENT_MIN_WIDTH_RATIO,
   FACE_MIN_INSIDE_RATIO,
-  FACE_MIN_WIDTH_RATIO,
+  FACE_RECOGNITION_MIN_WIDTH_RATIO,
 } from './config';
 
 const EMBEDDING_SIZE = 112;
@@ -40,9 +41,13 @@ function wait(milliseconds: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }
 
-function isUsableFace(detection: Detection, video: HTMLVideoElement): boolean {
+function isUsableFace(
+  detection: Detection,
+  video: HTMLVideoElement,
+  minimumWidthRatio: number,
+): boolean {
   const box = detection.boundingBox;
-  if (!box || box.width / video.videoWidth < FACE_MIN_WIDTH_RATIO) return false;
+  if (!box || box.width / video.videoWidth < minimumWidthRatio) return false;
   const left = Math.max(0, box.originX);
   const top = Math.max(0, box.originY);
   const right = Math.min(video.videoWidth, box.originX + box.width);
@@ -116,7 +121,10 @@ export class MediaPipeOnnxFaceRecognitionProvider implements FaceRecognitionProv
       samples.length < ENROLLMENT_SAMPLE_COUNT &&
       performance.now() < deadline
     ) {
-      const embedding = await this.captureEmbedding(video);
+      const embedding = await this.captureEmbedding(
+        video,
+        FACE_ENROLLMENT_MIN_WIDTH_RATIO,
+      );
       if (embedding) {
         samples.push(embedding);
         onProgress?.(samples.length / ENROLLMENT_SAMPLE_COUNT);
@@ -139,7 +147,10 @@ export class MediaPipeOnnxFaceRecognitionProvider implements FaceRecognitionProv
     margin?: number,
   ): Promise<FaceMatch | null> {
     this.requireSession();
-    const embedding = await this.captureEmbedding(video);
+    const embedding = await this.captureEmbedding(
+      video,
+      FACE_RECOGNITION_MIN_WIDTH_RATIO,
+    );
     return embedding
       ? selectBestFaceMatch(embedding, candidates, threshold, margin)
       : null;
@@ -164,6 +175,7 @@ export class MediaPipeOnnxFaceRecognitionProvider implements FaceRecognitionProv
 
   private async captureEmbedding(
     video: HTMLVideoElement,
+    minimumWidthRatio: number,
   ): Promise<number[] | null> {
     if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
       this.diagnostics = { detectedFaces: 0, detectionConfidence: null };
@@ -178,7 +190,7 @@ export class MediaPipeOnnxFaceRecognitionProvider implements FaceRecognitionProv
     if (
       detectionResult.count !== 1 ||
       !detection ||
-      !isUsableFace(detection, video)
+      !isUsableFace(detection, video, minimumWidthRatio)
     )
       return null;
 
@@ -226,6 +238,8 @@ export class MediaPipeOnnxFaceRecognitionProvider implements FaceRecognitionProv
     const sine = Math.sin(-angle) * scale;
 
     context.setTransform(1, 0, 0, 1, 0, 0);
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
     context.fillStyle = '#000';
     context.fillRect(0, 0, EMBEDDING_SIZE, EMBEDDING_SIZE);
     context.setTransform(
