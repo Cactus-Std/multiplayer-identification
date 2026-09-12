@@ -108,3 +108,5 @@ npm run model:check
 - **Action rejected:** confirm the detected identity is the current-turn player and that the socket is connected. Presence intentionally expires after two seconds.
 
 Third-party runtime and model provenance is recorded in [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).
+
+For the full Chinese/English-jargon architecture rationale, face-enrollment walkthrough, implementation notes, known limitations, and production-integration checklist, see [TECHNICAL_HANDOFF.zh-CN.md](./TECHNICAL_HANDOFF.zh-CN.md).
